@@ -34,7 +34,7 @@ def generate_oauth_service():
 def generate_ride_headers(token):
     """Generate the header object that is used to make api requests."""
     return {
-        'Authorization': 'bearer %s' % token,
+        'Authorization': 'Bearer %s' % token,
         'Content-Type': 'application/json',
     }
 
@@ -54,7 +54,7 @@ def signup():
     params = {
         'response_type': 'code',
         'redirect_uri': get_redirect_uri(request),
-        'scopes': ','.join(config.get('scopes')),
+        'scope': ' '.join(config.get('scope')),
     }
     url = generate_oauth_service().get_authorize_url(**params)
     return redirect(url)
@@ -117,10 +117,37 @@ def products():
     return response.text
 
 
+@app.route('/ridereq', methods=['GET'])
+def ridereq():
+    """
+    DO NOT USE THE BASE UBER URL OR I GET CHARGED MONEY
+
+    Make a sample ride request. Needs start and end lat/lon
+    and the unique Product ID of the Uber service for your city
+    """
+    url = config.get('sandbox_uber_base_url_v1') + 'requests'
+    params = {
+        "product_id": "02d5b168-49e2-41a4-a34b-590ea6f49909",
+        "start_latitude": 41.313248,
+        "start_longitude": -72.931547,
+        "end_latitude": 41.297534,
+        "end_longitude": -72.926922
+    }
+
+    response = app.requests_session.post(
+        url,
+        headers=generate_ride_headers(session.get('access_token')),
+        data='{"start_latitude":"41.3132481","start_longitude":"-72.9315478","end_latitude":"41.297534","end_longitude":"-72.926922","product_id":"02d5b168-49e2-41a4-a34b-590ea6f49909"}',
+    )
+
+    if response.status_code != 200:
+        print response.json()
+    return response.text
+
+
 @app.route('/time', methods=['GET'])
 def time():
-    """Example call to the time estimates endpoint.
-
+    """
     Returns the time estimates from the given lat/lng given below.
     """
     url = config.get('base_uber_url') + 'estimates/time'
