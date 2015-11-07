@@ -335,3 +335,6 @@ _Pvt_Extensions
 
 # FAKE - F# Make
 .fake/
+
+# Configuration stuff
+credentials.ini
