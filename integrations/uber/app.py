@@ -114,11 +114,7 @@ def products():
 
     if response.status_code != 200:
         return 'There was an error', response.status_code
-    return render_template(
-        'results.html',
-        endpoint='products',
-        data=response.text,
-    )
+    return response.text
 
 
 @app.route('/time', methods=['GET'])
@@ -141,11 +137,7 @@ def time():
 
     if response.status_code != 200:
         return 'There was an error', response.status_code
-    return render_template(
-        'results.html',
-        endpoint='time',
-        data=response.text,
-    )
+    return response.text
 
 
 @app.route('/price', methods=['GET'])
@@ -170,11 +162,7 @@ def price():
 
     if response.status_code != 200:
         return 'There was an error', response.status_code
-    return render_template(
-        'results.html',
-        endpoint='price',
-        data=response.text,
-    )
+    return response.text
 
 
 @app.route('/history', methods=['GET'])
@@ -194,11 +182,7 @@ def history():
 
     if response.status_code != 200:
         return 'There was an error', response.status_code
-    return render_template(
-        'results.html',
-        endpoint='history',
-        data=response.text,
-    )
+    return response.text
 
 
 @app.route('/me', methods=['GET'])
@@ -212,11 +196,7 @@ def me():
 
     if response.status_code != 200:
         return 'There was an error', response.status_code
-    return render_template(
-        'results.html',
-        endpoint='me',
-        data=response.text,
-    )
+    return response.text
 
 
 def get_redirect_uri(request):
