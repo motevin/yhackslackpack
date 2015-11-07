@@ -98,7 +98,7 @@ def demo():
 def products():
     """Example call to the products endpoint.
 
-    Returns all the products currently available in San Francisco.
+    Returns all the products currently available in New Haven.
     """
     url = config.get('base_uber_url') + 'products'
     params = {
