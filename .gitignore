@@ -338,3 +338,5 @@ _Pvt_Extensions
 
 # Configuration stuff
 credentials.ini
+bot/bot.pyproj
+bot/bot.sln
