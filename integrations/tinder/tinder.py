@@ -10,7 +10,6 @@ def connect_to_mongo():
     credentials = ConfigParser.ConfigParser()
     credentials.read("../../credentials.ini")
 
-    # client = MongoClient('mongodb://admin:yhackslackpack@104.236.11.224:27017/yhackslackpack?authSource=admin')
     host = credentials.get("Mongo", "connection")
     user = credentials.get("Mongo", "user")
     password = credentials.get("Mongo", "password")
@@ -36,7 +35,8 @@ def main(user):
     session = get_tinder_creds(user)
     users = session.nearby_users()
     for user in users[:5]:
-        print user.like()
+        print(user.get_photos())
+        print("\n")
 
 if __name__ == '__main__':
     main("U03FN2LLB")
