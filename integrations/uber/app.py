@@ -9,6 +9,7 @@ from flask_sslify import SSLify
 from rauth import OAuth2Service
 import requests
 import string
+import db
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 app.requests_session = requests.Session()
@@ -18,7 +19,6 @@ sslify = SSLify(app)
 
 with open('config.json') as f:
     config = json.load(f)
-
 
 def generate_oauth_service():
     """Prepare the OAuth2Service that is used to make requests later."""
@@ -52,7 +52,12 @@ def signup():
 
     You should navigate here first. It will redirect to login.uber.com.
     """
-    # parse args here. sanders, i need these args!!!
+    # TODO: check for token (match user object on slack ID)
+    # if token, check token works, if not, generate new token as below and put it in the database.
+    client = db.get_connection()
+    user_uber_data = client.yhackslackpack.users.find_one({"_id": "U03FQDYTM"})
+    if user_uber_data:
+        print user_uber_data
     params = {
         'response_type': 'code',
         'redirect_uri': get_redirect_uri(request),
@@ -60,6 +65,7 @@ def signup():
     }
     url = generate_oauth_service().get_authorize_url(**params)
     return redirect(url)
+
 
 @app.route('/surge_confirm', methods=['POST'])
 def surge_confirm():
@@ -87,7 +93,9 @@ def submit():
         ),
         data=params,
     )
+
     session['access_token'] = response.json().get('access_token')
+    #send to mongo
 
     return render_template(
         'success.html',
