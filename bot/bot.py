@@ -73,7 +73,7 @@ def process(user, message):
     #Service is currently not running. We need to start it. Idk how to MQ
     except pika.exceptions.ChannelClosed:
         channel = connection.channel()
-        service = "tinder" #assume the service name is the first thing in the message. Yes its janky. This is a fucking hackathon
+        service = message.partition(' ')[0] #assume the service name is the first thing in the message. Yes its janky. This is a fucking hackathon
         message.strip(service)
         print "Checking message: " + message
         start_service_and_await_response(service, user, message)
@@ -90,7 +90,7 @@ def run(apikey):
                 print response
                 if 'type' in response[0] and response[0]['type'] == 'message':
                     # direct messages start with D
-                    if (response[0]['channel'][0] == 'D' and response[0]['user'] != 'U0E2LB8C8'):
+                    if (response[0]['channel'][0] == 'D' and 'user' in response[0] and response[0]['user'] != 'U0E2LB8C8'):
                         slack_channel = response[0]['channel']
                         t = Thread(target=process, args=(response[0]['user'],response[0]['text']))
                         t.start()
