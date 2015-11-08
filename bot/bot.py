@@ -6,7 +6,7 @@ import json
 from threading import Thread
 from slackclient import SlackClient
 
-PROJECT_ROOT = "/Users/tevin/dev/yhackslackpack"
+PROJECT_ROOT = "../"
 connection = pika.BlockingConnection(pika.ConnectionParameters(
         host='localhost'))
 channel = connection.channel()
@@ -101,7 +101,7 @@ def run(apikey):
 
 def main():
     config = ConfigParser.ConfigParser()
-    config.read("/Users/tevin/dev/yhackslackpack/credentials.ini")
+    config.read("../credentials.ini")
     token = config.get('Slack', 'apikey')
     run(token)
 
