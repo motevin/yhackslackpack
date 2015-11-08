@@ -340,3 +340,5 @@ _Pvt_Extensions
 credentials.ini
 bot/bot.pyproj
 bot/bot.sln
+integrations/venmo/venmo.pyproj
+integrations/venmo/venmo.sln
