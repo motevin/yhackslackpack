@@ -20,10 +20,10 @@ def get_likes_remaining(user):
 
 def swipe(ch, method, properties, body):
     channel.stop_consuming()
-    if body == "yes":
+    if body == "swipe":
         if tinder_user.like():
             send_message_and_exit(user, "YOU HAVE A MATCH!")
-    elif body == "no":
+    elif body == "nah":
         tinder_user.dislike()
     else:
         send_message_and_exit(user, "Yeah should probably not be on Tinder at work")
