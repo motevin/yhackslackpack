@@ -85,7 +85,7 @@ def send_message_and_exit(queue, message):
 def connect_to_mongo():
 
     credentials = ConfigParser.ConfigParser()
-    credentials.read("/Users/tevin/dev/yhackslackpack/credentials.ini")
+    credentials.read("../credentials.ini")
 
     host = credentials.get("Mongo", "connection")
     user = credentials.get("Mongo", "user")
