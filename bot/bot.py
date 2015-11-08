@@ -6,7 +6,7 @@ import json
 from threading import Thread
 from slackclient import SlackClient
 
-PROJECT_ROOT = "/Users/tevin/dev/yhackslackpack"
+PROJECT_ROOT = "../"
 connection = pika.BlockingConnection(pika.ConnectionParameters(
         host='localhost'))
 channel = connection.channel()
@@ -73,7 +73,7 @@ def process(user, message):
     #Service is currently not running. We need to start it. Idk how to MQ
     except pika.exceptions.ChannelClosed:
         channel = connection.channel()
-        service = "tinder" #assume the service name is the first thing in the message. Yes its janky. This is a fucking hackathon
+        service = service = message.partition(' ')[0] #assume the service name is the first thing in the message. Yes its janky. This is a fucking hackathon
         message.strip(service)
         print "Checking message: " + message
         start_service_and_await_response(service, user, message)
@@ -101,7 +101,7 @@ def run(apikey):
 
 def main():
     config = ConfigParser.ConfigParser()
-    config.read("/Users/tevin/dev/yhackslackpack/credentials.ini")
+    config.read("../credentials.ini")
     token = config.get('Slack', 'apikey')
     run(token)
 
