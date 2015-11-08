@@ -14,15 +14,23 @@ sc = None
 slack_channel = None
 
 def wait_for_response(queue):
-    channel.queue_declare(queue=queue)
     print "Waiting for response from user " + queue
-    channel.basic_consume(callback, queue=queue, no_ack=True, consumer_tag=queue)
+    channel.basic_consume(received_message, queue=queue, no_ack=True, consumer_tag=queue)
     channel.start_consuming()
 
-def callback(ch, method, properties, body):
+def received_message(ch, method, properties, body):
     print "Bot Received %r" % (body,)
-    sc.rtm_send_message(slack_channel, body)
-    channel.stop_consuming()
+    body_dict = json.loads(body)
+    ims = sc.api_call('im.list')
+    chan = _get_user_im_channel(body_dict['user'], ims[0]['ims'])
+    if (chan != None):
+        sc.rtm_send_message(chan, body_dict['message'])
+
+def _get_user_im_channel(user, ims):
+    for im in ims:
+        if im['user'] == user:
+            return im['id']
+    return None
 
 #==========================
 # COMMUNICATE WITH SERVICES
@@ -37,15 +45,13 @@ def callback(ch, method, properties, body):
 # It's up to the service to parse the message.
 # Bot will wait for a response to post back to slack
 
-def send_message_and_await_response(queue, message):
+def send_message(queue, payload):
     print "Service already running"
-    channel.queue_declare(queue=queue)
-    channel.basic_publish(exchange='',routing_key=queue,body=message)
+    channel.basic_publish(exchange='',routing_key=queue,body=payload)
     print "Sending message to service for user " + queue
-    print "\nMessage: " + message
-    wait_for_response(queue)
+    print "\nMessage: " + payload
 
-def start_service_and_await_response(service, user, message):
+def start_service(service, user, message):
     print "Starting service " + service
     service_obj = get_service_module(service)
     payload = {}
@@ -53,7 +59,6 @@ def start_service_and_await_response(service, user, message):
     payload['message'] = message
     t = Thread(target=service_obj.main, args=(json.dumps(payload),))
     t.start()
-    wait_for_response(user)
 
 def get_service_module(service):
     config = ConfigParser.ConfigParser()
@@ -61,22 +66,31 @@ def get_service_module(service):
     service_path = PROJECT_ROOT + config.get('Modules', service)
     return imp.load_source('module.name', service_path)
 
+def listen_to_services():
+    channel.queue_declare(queue='input')
+    while True:
+        wait_for_response('input')
+
 # Process input from slack and either spin up the related service
 # or send the message as part of an ongoing exchange
 def process(user, message):
     global channel
-    # If a queue exists for the user, send it on that queue
+    # If a queue exists for the process, send it on that queue
     try:
-        channel.queue_declare(queue=user, passive=True)
-        send_message_and_await_response(user, message)
+        integration = message.partition(' ')[0]
+        channel.queue_declare(queue=integration, passive=True)
+        payload = {}
+        payload['user'] = user
+        payload['message'] = message
+        send_message(integration, payload)
 
     #Service is currently not running. We need to start it. Idk how to MQ
     except pika.exceptions.ChannelClosed:
         channel = connection.channel()
-        service = service = message.partition(' ')[0] #assume the service name is the first thing in the message. Yes its janky. This is a fucking hackathon
+        service = message.partition(' ')[0] #assume the service name is the first thing in the message. Yes its janky. This is a fucking hackathon
         message.strip(service)
         print "Checking message: " + message
-        start_service_and_await_response(service, user, message)
+        start_service(service, user, message)
 
 def run(apikey):
     global sc, slack_channel
@@ -100,6 +114,8 @@ def run(apikey):
 
 
 def main():
+    t = Thread(target=listen_to_services)
+    t.start()
     config = ConfigParser.ConfigParser()
     config.read("../credentials.ini")
     token = config.get('Slack', 'apikey')
