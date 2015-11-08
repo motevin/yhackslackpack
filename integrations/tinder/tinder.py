@@ -20,19 +20,13 @@ def get_likes_remaining(user):
 
 def swipe(ch, method, properties, body):
     channel.stop_consuming()
-    play(body)
-
-def play(dir):
-    if dir == "yes":
+    if body == "yes":
         if tinder_user.like():
             send_message_and_exit(user, "YOU HAVE A MATCH!")
-        else:
-            get_nearby_user(user)
-    elif dir == "no":
+    elif body == "no":
         tinder_user.dislike()
-        get_nearby_user(user)
     else:
-        send_message_and_exit(user, "Quit Tinder & Get back to work")
+        send_message_and_exit(user, "Yeah should probably not be on Tinder at work")
 
 def get_nearby_user(user):
     global tinder_user
