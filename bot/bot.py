@@ -3,6 +3,7 @@ import ConfigParser
 import pika
 import imp
 import json
+from threading import Thread
 from slackclient import SlackClient
 
 PROJECT_ROOT = "/Users/tevin/dev/yhackslackpack"
@@ -21,6 +22,7 @@ def wait_for_response(queue):
 def callback(ch, method, properties, body):
     print "Bot Received %r" % (body,)
     sc.rtm_send_message(slack_channel, body)
+    channel.stop_consuming()
 
 #==========================
 # COMMUNICATE WITH SERVICES
@@ -49,7 +51,8 @@ def start_service_and_await_response(service, user, message):
     payload = {}
     payload['user'] = user
     payload['message'] = message
-    service_obj.main(json.dumps(payload))
+    t = Thread(target=service_obj.main, args=(json.dumps(payload),))
+    t.start()
     wait_for_response(user)
 
 def get_service_module(service):
@@ -70,9 +73,9 @@ def process(user, message):
     #Service is currently not running. We need to start it. Idk how to MQ
     except pika.exceptions.ChannelClosed:
         channel = connection.channel()
-        channel.queue_declare(queue=user)
         service = "tinder" #assume the service name is the first thing in the message. Yes its janky. This is a fucking hackathon
         message.strip(service)
+        print "Checking message: " + message
         start_service_and_await_response(service, user, message)
 
 def run(apikey):
@@ -87,9 +90,10 @@ def run(apikey):
                 print response
                 if 'type' in response[0] and response[0]['type'] == 'message':
                     # direct messages start with D
-                    if (response[0]['channel'][0] == 'D'):
+                    if (response[0]['channel'][0] == 'D' and response[0]['user'] != 'U0E2LB8C8'):
                         slack_channel = response[0]['channel']
-                        process(response[0]['user'], response[0]['text'])
+                        t = Thread(target=process, args=(response[0]['user'],response[0]['text']))
+                        t.start()
             time.sleep(1)
     else:
         print 'connection failed'
