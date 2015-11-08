@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import json
 import os
 from urlparse import urlparse
+import pika
 
 from flask import Flask, render_template, request, redirect, session
 from flask_sslify import SSLify
@@ -19,6 +20,39 @@ sslify = SSLify(app)
 
 with open('config.json') as f:
     config = json.load(f)
+
+rabbit_connection = None
+channel = None
+
+
+def set_up_rabbit():
+    global rabbit_connection
+    global channel
+    rabbit_connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
+    channel = rabbit_connection.channel()
+
+def wait_for_response():
+    print "Waiting for response from slack "
+    channel.basic_consume(callback, queue="uber", no_ack=True, consumer_tag=queue)
+    channel.start_consuming()
+
+# This is what you do when you get back a response
+def callback(ch, method, properties, body):
+    channel.stop_consuming()
+    params = {
+        'message': body,
+    }
+    app.requests_session.get(
+        "http://127.0.0.1:7000/",
+        params = params,
+    )
+
+#here "message" is our standard JSON blob of ID/message
+def send_slack_message(message):
+    channel.queue_declare(queue="input", passive=True)
+    channel.basic_publish(exchange='',routing_key=queue,body=message)
+    print "Sending message to service for user "
+    print "\nMessage: " + message
 
 def generate_oauth_service():
     """Prepare the OAuth2Service that is used to make requests later."""
@@ -281,4 +315,5 @@ def getLatLng(address):
 
 if __name__ == '__main__':
     app.debug = os.environ.get('FLASK_DEBUG', True)
-    app.run(port=7000)
+    set_up_rabbit()
+    app.run(port=7000, threaded=True)
