@@ -54,6 +54,19 @@ def send_slack_message(message):
     print "Sending message to service for user "
     print "\nMessage: " + message
 
+def parse_inbound_message(message):
+    json_message = json.loads(message)
+    print json_message
+    user_message = str(json_message['message'])
+    print user_message
+    if "time" in user_message:
+        send_slack_message(time())
+    if "history" in user_message:
+        send_slack_message(history())
+    #etc etc for all of these
+
+
+
 def generate_oauth_service():
     """Prepare the OAuth2Service that is used to make requests later."""
     return OAuth2Service(
@@ -89,9 +102,12 @@ def signup():
     # TODO: check for token (match user object on slack ID)
     # if token, check token works, if not, generate new token as below and put it in the database.
     client = db.get_connection()
+    # json
     user_uber_data = client.yhackslackpack.users.find_one({"_id": "U03FQDYTM"})
-    if user_uber_data:
-        print user_uber_data
+    if user_uber_data["access_token"] != "":
+        print user_uber_data["access_token"]
+        # already authed, parse message
+        return parse(request.args.get("message"))
     params = {
         'response_type': 'code',
         'redirect_uri': get_redirect_uri(request),
@@ -199,7 +215,6 @@ def ridereq():
     return response.text
 
 
-@app.route('/time', methods=['GET'])
 def time():
     """
     Returns the time estimates from the given lat/lng given below.
@@ -315,5 +330,5 @@ def getLatLng(address):
 
 if __name__ == '__main__':
     app.debug = os.environ.get('FLASK_DEBUG', True)
-    set_up_rabbit()
+    #set_up_rabbit()
     app.run(port=7000, threaded=True)
