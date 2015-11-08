@@ -149,10 +149,13 @@ def get_message_from_json(json_obj):
 def parse(user, message):
     if "likes" in message:
         get_likes_remaining(user)
+        exit()
     elif "nearby" in message:
         get_nearby_user(user)
+        exit()
     elif "auth" in message:
         write_auth_key(user)
+        exit()
 
 # Creates a global Tinder session for the specified user and executes the given query
 def main(args):
@@ -164,6 +167,7 @@ def main(args):
         print("Succesfully connected to tinder")
     except pynder.errors.RequestError:
         do_auth(user)
+        exit()
 
     message = get_message_from_json(args)
     parse(user, message)
