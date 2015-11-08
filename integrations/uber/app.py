@@ -8,6 +8,7 @@ from flask import Flask, render_template, request, redirect, session
 from flask_sslify import SSLify
 from rauth import OAuth2Service
 import requests
+import string
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 app.requests_session = requests.Session()
@@ -51,6 +52,7 @@ def signup():
 
     You should navigate here first. It will redirect to login.uber.com.
     """
+    # parse args here. sanders, i need these args!!!
     params = {
         'response_type': 'code',
         'redirect_uri': get_redirect_uri(request),
@@ -58,6 +60,11 @@ def signup():
     }
     url = generate_oauth_service().get_authorize_url(**params)
     return redirect(url)
+
+@app.route('/surge_confirm', methods=['POST'])
+def surge_confirm():
+    #confirm this is correct
+    surge_confirm_id = request.args.get('surge_confirmation_id')
 
 
 @app.route('/submit', methods=['GET'])
@@ -142,6 +149,11 @@ def ridereq():
 
     if response.status_code != 200:
         print response.json()
+    if response.status_code == 409:
+        #response.meta.href... send the user here.
+        #after that, surge_confirm will be called if the user agrees
+        #return "You need to go to " + response.meta.href
+        print "409 error"
     return response.text
 
 
@@ -234,6 +246,30 @@ def get_redirect_uri(request):
             hostname=parsed_url.hostname, port=parsed_url.port
         )
     return 'https://{hostname}/submit'.format(hostname=parsed_url.hostname)
+
+
+def getLatLng(address):
+    google_key = os.environ.get("GOOGLE_API_KEY")
+    google_url = os.environ.get("APITOOLS_GOOGLE_SERVICEURL") + "/geocode/json"
+
+    address = string.replace(address, " ", "+")
+
+    params = {
+        'address': address,
+        'key': google_key,
+    }
+
+    response = app.requests_session.get(
+        google_url,
+        params=params,
+    )
+
+    if response.status_code != 200:
+        return "There was an error", response.json()
+    response_data = json.loads(response.text)
+    latlng = response_data["results"][0]["geometry"]["location"]
+
+    return latlng
 
 if __name__ == '__main__':
     app.debug = os.environ.get('FLASK_DEBUG', True)
