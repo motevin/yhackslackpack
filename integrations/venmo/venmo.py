@@ -2,87 +2,31 @@ import ConfigParser
 import requests
 import datetime
 import pytz
-import pika
-import sys
-import json
 from pymongo import MongoClient
 
-integration_name = 'venmo'
 access_token = ''
 venmo_id = ''
-g_user_id = ''
-connection = None
-channel = None
-
-def setup_pika():
-    global connection
-    global channel
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
-    channel = connection.channel()
-
-def wait_for_response():
-    print "Waiting for response from slack " + integration_name
-    channel.basic_consume(callback, queue=integration_name, no_ack=True, consumer_tag=integration_name)
-    channel.start_consuming()
-
-def send_message(user, message):
-    payload = {}
-    payload['user'] = user
-    payload['message'] = message
-    channel.basic_publish(exchange='',routing_key='input',body=json.dumps(payload))
-    print "Sending message to service"
-    print "\nMessage: " + json.dumps(payload)
-
-def send_message_and_await_response(user, message):
-    send_message(user, message)
-    wait_for_response()
-
-def send_message_and_exit(user, message):
-    send_message(user, message)
-    connection.close()
-
-def cleanup():
-    print 'running cleanup'
-    try:
-        print 'trying to delete queue'
-        channel.queue_delete(queue=integration_name)
-    except:
-        print 'failed delete'
-        try:
-            print 'trying to close connection from failed delete queue'
-            connection.close()
-        except:
-            print 'failed failed close'
-            print 'returning cleanup'
-            return
-        print 'suceeded close'
-        print 'returning cleanup'
-        return
-    try:
-        print 'trying to close connection'
-        connection.close()
-    except:
-        print 'failed close'
-        return
-    print 'exiting cleanup'
-
-# This is what you do when you get back a response
-def callback(ch, method, properties, body):
-    channel.stop_consuming()
-    body_dict = json.loads(body)
-    parse_message(body_dict['message'])
 
 # Connects to mongo and returns a MongoClient
 def connect_to_mongo():
+
     credentials = ConfigParser.ConfigParser()
-    credentials.read("../credentials.ini")
+    credentials.read("../../credentials.ini")
+
     host = credentials.get("Mongo", "connection")
     user = credentials.get("Mongo", "user")
     password = credentials.get("Mongo", "password")
     db = credentials.get("Mongo", "database")
     connection_url = "mongodb://" + user + ":" + password + "@" + host + "/" + db + "?authSource=admin"
+
     client = MongoClient(connection_url)
     return client[db]
+
+def send_to_bot():
+    pass
+
+def recieve_from_bot():
+    pass
 
 def update_database(user_id, db, access_token, expires_date, refresh_token):
     return db.users.update_one({'_id': user_id},
@@ -98,20 +42,32 @@ def update_database(user_id, db, access_token, expires_date, refresh_token):
 
 def get_access_token(user_id):
     config = ConfigParser.ConfigParser()
-    config.read('../credentials.ini')
+    config.read('../../credentials.ini')
     db = connect_to_mongo()
     venmo_auth = db.users.find_one({'_id': user_id}, {'venmo': 1})
-    if (venmo_auth == None or venmo_auth['venmo']['access_token'] == ''):
+    if (venmo_auth == None):
         user_doc = db.users.find_one({'_id': user_id})
         if (user_doc == None):
             create_user_doc = db.users.insert_one({'_id': user_id})
         create_venmo_auth = update_database(user_id, db, '', '', '')
         auth_url = 'https://api.venmo.com/v1/oauth/authorize?client_id=' + config.get('Venmo', 'clientId') + '&scope=make_payments%20access_payment_history%20access_feed%20access_profile%20access_email%20access_phone%20access_balance%20access_friends&response_type=code'
-        url_message = ('Authenticate to Venmo with the following URL: ' + auth_url + ' then send back the auth code in this format\n'
-                       'venmo code CODE')
-        send_message_and_await_response(user_id, url_message)
-        print 'returning from get_access'
-        return None
+        print auth_url
+        # send_to_bot(auth_url)
+        # receive_from_bot()
+        code = 'd611f37a8869117be6a000778077baf1'
+        post_data = {
+            'client_id': config.get('Venmo', 'clientId'),
+            'client_secret': config.get('Venmo', 'clientSecret'),
+            'code': code
+            }
+        response = requests.post('https://api.venmo.com/v1/oauth/access_token', post_data)
+        response_dict = response.json()
+        access_token = response_dict['access_token']
+        expires_in = response_dict['expires_in']
+        expires_date = (datetime.datetime.utcnow().replace(tzinfo = pytz.utc) + datetime.timedelta(seconds=expires_in))
+        refresh_token = response_dict['refresh_token']
+        update_access_token = update_database(user_id, db, access_token, expires_date, refresh_token)
+        return access_token
     else:
         expires_date = venmo_auth['venmo']['expires_in'].replace(tzinfo = pytz.utc)
         if (expires_date < datetime.datetime.utcnow().replace(tzinfo = pytz.utc)):
@@ -128,26 +84,6 @@ def get_access_token(user_id):
             update_database(user_id, db, access_token, expires_date, response_dict['refresh_token'])
             return access_token
         return venmo_auth['venmo']['access_token']
-
-def complete_auth(code):
-    config = ConfigParser.ConfigParser()
-    config.read('../credentials.ini')
-    db = connect_to_mongo()
-    post_data = {
-        'client_id': config.get('Venmo', 'clientId'),
-        'client_secret': config.get('Venmo', 'clientSecret'),
-        'code': code
-        }
-    response = requests.post('https://api.venmo.com/v1/oauth/access_token', post_data)
-    response_dict = response.json()
-    access_token = response_dict['access_token']
-    expires_in = response_dict['expires_in']
-    expires_date = (datetime.datetime.utcnow().replace(tzinfo = pytz.utc) + datetime.timedelta(seconds=expires_in))
-    refresh_token = response_dict['refresh_token']
-    global g_user_id
-    update_access_token = update_database(g_user_id, db, access_token, expires_date, refresh_token)
-    send_message_and_exit(g_user_id, 'Authentication complete!')
-    print 'completed auth'
 
 def _get_venmo_id():
     global access_token
@@ -184,8 +120,7 @@ def get_venmo_balance():
     response_dict = response.json()
     if ('error' in response_dict):
         venmo_error(response_dict['error'])
-    global g_user_id
-    send_message_and_exit(g_user_id, response_dict['data']['balance'])
+    return response_dict['data']['balance']
 
 def venmo_payment(audience, which, amount, note, recipients):
     global access_token
@@ -199,7 +134,6 @@ def venmo_payment(audience, which, amount, note, recipients):
     if ('error' in friends_response_dict):
         venmo_error(friends_response_dict['error'])
     full = _get_pagination(friends_response_dict, access_token)
-    final_message = ''
     for r in recipients:
         post_data = {
             'access_token': access_token
@@ -222,7 +156,8 @@ def venmo_payment(audience, which, amount, note, recipients):
         response = requests.post(url, post_data)
         response_dict = response.json()
         if ('error' in response_dict):
-            final_message += response_dict['error']['message'] + '\n'
+            pass
+            # send response_dict['error']['message']
         else:
             name = ''
             target = response_dict['data']['payment']['target']
@@ -233,11 +168,10 @@ def venmo_payment(audience, which, amount, note, recipients):
             elif (target['type'] == 'email'):
                 name = target['email']
             if (amount_str.startswith('-')):
-                final_message += 'Successfully charged ' + name + ' $' '{:0,.2f}'.format(response_dict['data']['payment']['amount']) + ' for ' + response_dict['data']['payment']['note'] + '. Audience is ' + audience + '.\n'
+                print 'Successfully charged ' + name + ' $' '{:0,.2f}'.format(response_dict['data']['payment']['amount']) + ' for ' + response_dict['data']['payment']['note'] + '. Audience is ' + audience
             else:
-                final_message += 'Successfully paid ' + name + ' $' '{:0,.2f}'.format(response_dict['data']['payment']['amount']) + ' for ' + response_dict['data']['payment']['note'] + '. Audience is ' + audience + '.\n'
-    global g_user_id
-    send_message_and_exit(g_user_id, final_message)
+                print 'Successfully paid ' + name + ' $' '{:0,.2f}'.format(response_dict['data']['payment']['amount']) + ' for ' + response_dict['data']['payment']['note'] + '. Audience is ' + audience
+
 
 def venmo_pending(which):
     global access_token
@@ -257,11 +191,7 @@ def venmo_pending(which):
             if (pending['actor']['id'] == venmo_id):
                 if (pending['target']['type'] == 'user'):
                     message += pending['target']['user']['display_name'] + ' owes you $' + '{:0,.2f}'.format(pending['amount']) + ' ' + pending['note'] + ' | ID: ' + pending['id'] + '\n'
-    global g_user_id
-    if (message != ''):
-        send_message_and_exit(g_user_id, message[0:-1])
-    else:
-        send_message_and_exit(g_user_id, 'No pending Venmos')
+    return message[0:-1]
 
 def venmo_complete(which, number):
     global access_token
@@ -281,7 +211,7 @@ def venmo_complete(which, number):
         venmo_error(response_dict['error'])
 
 def help():
-    message = ('Venmo help\n'
+    print ('Venmo help\n'
            'Commands:\n'
            'venmo balance\n'
            '    returns your Venmo balance\n'
@@ -298,21 +228,16 @@ def help():
            '    also returns ID for payment completion\n'
            'venmo complete accept/reject number\n'
            '    accept OR reject a payment with the given ID\n'
-           'venmo code code\n'
-           '    code = Venmo authentication code'
            'venmo help\n'
            '    this help message')
-    global g_user_id
-    send_message_and_exit(g_user_id, message)
+
 
 def venmo_error(dict):
-    global g_user_id
-    send_message_and_exit(g_user_id, dict['message'])
+    print dict['message']
     exit()
 
 def parse_error(error_message):
-    global g_user_id
-    send_message_and_exit(g_user_id, error_message)
+    print error_message
 
 def _find_last_str_in_list(list, str):
     index = -1
@@ -327,10 +252,10 @@ def parse_message(message):
         help()
     elif (split_message[1].lower() == 'help'):
         help()
-    elif (split_message[1].lower() == 'code'):
-        complete_auth(split_message[2])
     elif (split_message[1].lower() == 'balance'):
-        get_venmo_balance()
+        balance = get_venmo_balance()
+        print balance
+        # send to bot
     elif (split_message[1].lower() == 'pending'):
         if (len(split_message) == 2):
             venmo_pending('to')
@@ -392,20 +317,12 @@ def parse_message(message):
         recipients = split_message[to_index + 1:]
         venmo_payment(audience, which, amount, note, recipients)
 
-def main(args):
-    setup_pika()
-    start_message = json.loads(args)
-    user_id = start_message['user']
-    global g_user_id
-    g_user_id = user_id
+def main(user_id):
     global access_token
     access_token = get_access_token(user_id)
-    if (access_token != None):
-        _get_venmo_id()
-        parse_message(start_message['message'])
-    else:
-        print 'access_token was none'
-    cleanup()
+    _get_venmo_id()
+    parse_message('venmo')
+    parse_message('venmo help')
 
 if __name__ == '__main__':
-    main(sys.argv)
+    main('U03FNCQL3')

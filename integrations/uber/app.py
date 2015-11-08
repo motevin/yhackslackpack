@@ -3,7 +3,6 @@ from __future__ import absolute_import
 import json
 import os
 from urlparse import urlparse
-import pika
 
 from flask import Flask, render_template, request, redirect, session
 from flask_sslify import SSLify
@@ -20,52 +19,6 @@ sslify = SSLify(app)
 
 with open('config.json') as f:
     config = json.load(f)
-
-rabbit_connection = None
-channel = None
-
-
-def set_up_rabbit():
-    global rabbit_connection
-    global channel
-    rabbit_connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
-    channel = rabbit_connection.channel()
-
-def wait_for_response():
-    print "Waiting for response from slack "
-    channel.basic_consume(callback, queue="uber", no_ack=True, consumer_tag=queue)
-    channel.start_consuming()
-
-# This is what you do when you get back a response
-def callback(ch, method, properties, body):
-    channel.stop_consuming()
-    params = {
-        'message': body,
-    }
-    app.requests_session.get(
-        "http://127.0.0.1:7000/",
-        params = params,
-    )
-
-#here "message" is our standard JSON blob of ID/message
-def send_slack_message(message):
-    channel.queue_declare(queue="input", passive=True)
-    channel.basic_publish(exchange='',routing_key=queue,body=message)
-    print "Sending message to service for user "
-    print "\nMessage: " + message
-
-def parse_inbound_message(message):
-    json_message = json.loads(message)
-    print json_message
-    user_message = str(json_message['message'])
-    print user_message
-    if "time" in user_message:
-        send_slack_message(time())
-    if "history" in user_message:
-        send_slack_message(history())
-    #etc etc for all of these
-
-
 
 def generate_oauth_service():
     """Prepare the OAuth2Service that is used to make requests later."""
@@ -102,12 +55,9 @@ def signup():
     # TODO: check for token (match user object on slack ID)
     # if token, check token works, if not, generate new token as below and put it in the database.
     client = db.get_connection()
-    # json
     user_uber_data = client.yhackslackpack.users.find_one({"_id": "U03FQDYTM"})
-    if user_uber_data["access_token"] != "":
-        print user_uber_data["access_token"]
-        # already authed, parse message
-        return parse(request.args.get("message"))
+    if user_uber_data:
+        print user_uber_data
     params = {
         'response_type': 'code',
         'redirect_uri': get_redirect_uri(request),
@@ -215,6 +165,7 @@ def ridereq():
     return response.text
 
 
+@app.route('/time', methods=['GET'])
 def time():
     """
     Returns the time estimates from the given lat/lng given below.
@@ -330,5 +281,4 @@ def getLatLng(address):
 
 if __name__ == '__main__':
     app.debug = os.environ.get('FLASK_DEBUG', True)
-    #set_up_rabbit()
-    app.run(port=7000, threaded=True)
+    app.run(port=7000)
