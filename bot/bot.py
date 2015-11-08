@@ -52,6 +52,8 @@ def send_message(queue, payload):
     print "\nMessage: " + payload
 
 def start_service(service, user, message):
+    print 'Creating queue for ' + service
+    channel.queue_declare(queue=service)
     print "Starting service " + service
     service_obj = get_service_module(service)
     payload = {}
