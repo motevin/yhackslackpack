@@ -3,14 +3,11 @@ from __future__ import absolute_import
 import json
 import os
 from urlparse import urlparse
-import pika
 
 from flask import Flask, render_template, request, redirect, session
 from flask_sslify import SSLify
 from rauth import OAuth2Service
 import requests
-import string
-import db
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 app.requests_session = requests.Session()
@@ -21,38 +18,6 @@ sslify = SSLify(app)
 with open('config.json') as f:
     config = json.load(f)
 
-rabbit_connection = None
-channel = None
-
-
-def set_up_rabbit():
-    global rabbit_connection
-    global channel
-    rabbit_connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
-    channel = rabbit_connection.channel()
-
-def wait_for_response():
-    print "Waiting for response from slack "
-    channel.basic_consume(callback, queue="uber", no_ack=True, consumer_tag=queue)
-    channel.start_consuming()
-
-# This is what you do when you get back a response
-def callback(ch, method, properties, body):
-    channel.stop_consuming()
-    params = {
-        'message': body,
-    }
-    app.requests_session.get(
-        "http://127.0.0.1:7000/",
-        params = params,
-    )
-
-#here "message" is our standard JSON blob of ID/message
-def send_slack_message(message):
-    channel.queue_declare(queue="input", passive=True)
-    channel.basic_publish(exchange='',routing_key=queue,body=message)
-    print "Sending message to service for user "
-    print "\nMessage: " + message
 
 def generate_oauth_service():
     """Prepare the OAuth2Service that is used to make requests later."""
@@ -86,12 +51,6 @@ def signup():
 
     You should navigate here first. It will redirect to login.uber.com.
     """
-    # TODO: check for token (match user object on slack ID)
-    # if token, check token works, if not, generate new token as below and put it in the database.
-    client = db.get_connection()
-    user_uber_data = client.yhackslackpack.users.find_one({"_id": "U03FQDYTM"})
-    if user_uber_data:
-        print user_uber_data
     params = {
         'response_type': 'code',
         'redirect_uri': get_redirect_uri(request),
@@ -99,12 +58,6 @@ def signup():
     }
     url = generate_oauth_service().get_authorize_url(**params)
     return redirect(url)
-
-
-@app.route('/surge_confirm', methods=['POST'])
-def surge_confirm():
-    #confirm this is correct
-    surge_confirm_id = request.args.get('surge_confirmation_id')
 
 
 @app.route('/submit', methods=['GET'])
@@ -127,9 +80,7 @@ def submit():
         ),
         data=params,
     )
-
     session['access_token'] = response.json().get('access_token')
-    #send to mongo
 
     return render_template(
         'success.html',
@@ -191,11 +142,6 @@ def ridereq():
 
     if response.status_code != 200:
         print response.json()
-    if response.status_code == 409:
-        #response.meta.href... send the user here.
-        #after that, surge_confirm will be called if the user agrees
-        #return "You need to go to " + response.meta.href
-        print "409 error"
     return response.text
 
 
@@ -289,31 +235,6 @@ def get_redirect_uri(request):
         )
     return 'https://{hostname}/submit'.format(hostname=parsed_url.hostname)
 
-
-def getLatLng(address):
-    google_key = os.environ.get("GOOGLE_API_KEY")
-    google_url = os.environ.get("APITOOLS_GOOGLE_SERVICEURL") + "/geocode/json"
-
-    address = string.replace(address, " ", "+")
-
-    params = {
-        'address': address,
-        'key': google_key,
-    }
-
-    response = app.requests_session.get(
-        google_url,
-        params=params,
-    )
-
-    if response.status_code != 200:
-        return "There was an error", response.json()
-    response_data = json.loads(response.text)
-    latlng = response_data["results"][0]["geometry"]["location"]
-
-    return latlng
-
 if __name__ == '__main__':
     app.debug = os.environ.get('FLASK_DEBUG', True)
-    set_up_rabbit()
-    app.run(port=7000, threaded=True)
+    app.run(port=7000)

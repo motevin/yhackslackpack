@@ -10,6 +10,3 @@ wsgiref==0.1.2
 
 gunicorn==18.0
 Flask-SSLify==0.1.4
-pymongo
-ConfigParser
-pika

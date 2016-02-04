@@ -7,7 +7,6 @@ import sys
 import json
 from pymongo import MongoClient
 
-integration_name = 'venmo'
 access_token = ''
 venmo_id = ''
 g_user_id = ''
@@ -20,32 +19,38 @@ def setup_pika():
     connection = pika.BlockingConnection(pika.ConnectionParameters(host='localhost'))
     channel = connection.channel()
 
-def wait_for_response():
-    print "Waiting for response from slack " + integration_name
-    channel.basic_consume(callback, queue=integration_name, no_ack=True, consumer_tag=integration_name)
+def wait_for_response(queue):
+    print "Waiting for response from slack " + queue
+    channel.basic_consume(callback, queue=queue, no_ack=True, consumer_tag=queue)
     channel.start_consuming()
 
-def send_message(user, message):
-    payload = {}
-    payload['user'] = user
-    payload['message'] = message
-    channel.basic_publish(exchange='',routing_key='input',body=json.dumps(payload))
-    print "Sending message to service"
-    print "\nMessage: " + json.dumps(payload)
+def send_message(queue, message):
+    channel.queue_declare(queue=queue)
+    channel.basic_publish(exchange='',routing_key=queue,body=message)
+    print "Sending message to service for user " + queue
+    print "\nMessage: " + message
+    connection.close()
 
-def send_message_and_await_response(user, message):
-    send_message(user, message)
-    wait_for_response()
+def send_message_and_await_response(queue, message):
+    channel.queue_declare(queue=queue)
+    channel.basic_publish(exchange='',routing_key=queue,body=message)
+    print "Sending message to service for user " + queue
+    print "\nMessage: " + message
+    wait_for_response(queue)
 
-def send_message_and_exit(user, message):
-    send_message(user, message)
+def send_message_and_exit(queue, message):
+    channel.queue_declare(queue=queue)
+    channel.basic_publish(exchange='',routing_key=queue,body=message)
+    print "Sending message to service for user " + queue
+    print "\nMessage: " + message
+    channel.queue_delete()
     connection.close()
 
 def cleanup():
     print 'running cleanup'
     try:
         print 'trying to delete queue'
-        channel.queue_delete(queue=integration_name)
+        channel.queue_delete()
     except:
         print 'failed delete'
         try:
@@ -69,8 +74,7 @@ def cleanup():
 # This is what you do when you get back a response
 def callback(ch, method, properties, body):
     channel.stop_consuming()
-    body_dict = json.loads(body)
-    parse_message(body_dict['message'])
+    parse_message(body)
 
 # Connects to mongo and returns a MongoClient
 def connect_to_mongo():
