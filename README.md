@@ -1,4 +1,4 @@
-# YHackSlackPack
+# [YHackSlackPack](http://motevin.github.io/yhackslackpack)
 It rhymes!
 
 ## What is it?
